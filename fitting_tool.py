@@ -1,22 +1,22 @@
 from resonator_tools import circuit, circlefit
 import numpy as np
 import Tkinter, tkFileDialog
+import matplotlib.pyplot as plt
 import scipy.optimize as spopt
 from os.path import join
 import os
 import pprint
-import matplotlib.pyplot as plt
 from matplotlib import pyplot
 import peakutils
 from peakutils.plot import plot as pplot
 from scipy.signal import find_peaks_cwt
 
-
 global Scale
-Scale=100
+Scale = 100
 
 global debug
-debug = True
+debug = False
+
 
 def file_chooser(format):
     root = Tkinter.Tk()
@@ -25,6 +25,7 @@ def file_chooser(format):
     root.deiconify()
     root.destroy()
     return root.File
+
 
 def MyGUIfit(self):
     '''
@@ -41,9 +42,10 @@ def MyGUIfit(self):
     fig, ((ax2, ax0), (ax1, ax3)) = plt.subplots(nrows=2, ncols=2)
     plt.suptitle('Normalized data. Use the silders to improve the fitting if necessary.')
     plt.subplots_adjust(left=0.25, bottom=0.25)
-    l0, = ax0.plot(self.f_data * 1e-9, np.absolute(self.z_data)-(np.absolute(self.z_data_sim_norm[self._fid])))
+    l0, = ax0.plot(self.f_data * 1e-9, np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid])))
     l1, = ax1.plot(self.f_data * 1e-9, np.angle(self.z_data))
-    l2, = ax2.plot(np.real(self.z_data)-(np.real(self.z_data_sim_norm[self._fid])), np.imag(self.z_data)-(np.imag(self.z_data_sim_norm[self._fid])))
+    l2, = ax2.plot(np.real(self.z_data) - (np.real(self.z_data_sim_norm[self._fid])),
+                   np.imag(self.z_data) - (np.imag(self.z_data_sim_norm[self._fid])))
     # l0s, = ax0.plot(self.f_data * 1e-9, np.absolute(self.z_data_sim_norm))
     # l1s, = ax1.plot(self.f_data * 1e-9, np.angle(self.z_data_sim_norm))
     # l2s, = ax2.plot(np.real(self.z_data_sim_norm), np.imag(self.z_data_sim_norm))
@@ -73,14 +75,15 @@ def MyGUIfit(self):
 
     def update(val):
         self.autofit(electric_delay=sdelay.val * sscale * self.__delay, fcrop=(sf1.val * 1e9, sf2.val * 1e9))
-        l0.set_data(self.f_data * 1e-9, np.absolute(self.z_data)-(np.absolute(self.z_data_sim_norm[self._fid])))
-        l1.set_data(self.f_data * 1e-9, np.angle(self.z_data)-(np.angle(self.z_data_sim_norm[self._fid])))
-        l2.set_data(np.real(self.z_data)-(np.real(self.z_data_sim_norm[self._fid])), np.imag(self.z_data)-(np.imag(self.z_data_sim_norm[self._fid])))
+        l0.set_data(self.f_data * 1e-9, np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid])))
+        l1.set_data(self.f_data * 1e-9, np.angle(self.z_data) - (np.angle(self.z_data_sim_norm[self._fid])))
+        l2.set_data(np.real(self.z_data) - (np.real(self.z_data_sim_norm[self._fid])),
+                    np.imag(self.z_data) - (np.imag(self.z_data_sim_norm[self._fid])))
 
-        print 'abs=',max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid])))*Scale
-        print 'ang=',max(np.angle(self.z_data) - (np.angle(self.z_data_sim_norm[self._fid])))*Scale
-        print 'Re=',max(np.real(self.z_data) - (np.real(self.z_data_sim_norm[self._fid])))*Scale
-        print 'Im=',max(np.imag(self.z_data) - (np.imag(self.z_data_sim_norm[self._fid])))*Scale,'\n'
+        print 'abs=', max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid]))) * Scale
+        print 'ang=', max(np.angle(self.z_data) - (np.angle(self.z_data_sim_norm[self._fid]))) * Scale
+        print 'Re=', max(np.real(self.z_data) - (np.real(self.z_data_sim_norm[self._fid]))) * Scale
+        print 'Im=', max(np.imag(self.z_data) - (np.imag(self.z_data_sim_norm[self._fid]))) * Scale, '\n'
 
         # l0s.set_data(self.f_data[self._fid] * 1e-9, np.absolute(self.z_data_sim_norm[self._fid]))
         # l1s.set_data(self.f_data[self._fid] * 1e-9, np.angle(self.z_data_sim_norm[self._fid]))
@@ -106,28 +109,29 @@ def MyGUIfit(self):
     plt.show()
     plt.close()
 
-def myplot1(self,i):
+
+def myplot1(self, i):
     plt.figure(i)
     real = self.z_data_raw.real
     imag = self.z_data_raw.imag
     real2 = self.z_data_sim.real
     imag2 = self.z_data_sim.imag
     plt.subplot(221)
-    plt.plot(real-real2, imag-imag2, label='rawdata')
+    plt.plot(real - real2, imag - imag2, label='rawdata')
     # plt.plot(real, imag, label='rawdata')
     # plt.plot(real2, imag2, label='fit')
     plt.xlabel('Re(S21)')
     plt.ylabel('Im(S21)')
     # plt.legend()
     plt.subplot(222)
-    plt.plot(self.f_data * 1e-9, np.absolute(self.z_data_raw)-(np.absolute(self.z_data_sim)), label='rawdata')
+    plt.plot(self.f_data * 1e-9, np.absolute(self.z_data_raw) - (np.absolute(self.z_data_sim)), label='rawdata')
     # plt.plot(self.f_data * 1e-9, np.absolute(self.z_data_raw), label='rawdata')
     # plt.plot(self.f_data * 1e-9, np.absolute(self.z_data_sim), label='fit')
     plt.xlabel('f (GHz)')
     plt.ylabel('|S21|')
     # plt.legend()
     plt.subplot(223)
-    plt.plot(self.f_data * 1e-9, np.angle(self.z_data_raw)-(np.angle(self.z_data_sim)), label='rawdata')
+    plt.plot(self.f_data * 1e-9, np.angle(self.z_data_raw) - (np.angle(self.z_data_sim)), label='rawdata')
     # plt.plot(self.f_data * 1e-9, np.angle(self.z_data_raw), label='rawdata')
     # plt.plot(self.f_data * 1e-9, np.angle(self.z_data_sim), label='fit')
     plt.xlabel('f (GHz)')
@@ -135,7 +139,8 @@ def myplot1(self,i):
     # plt.legend()
     # plt.show()
 
-def myplot2(self,i):
+
+def myplot2(self, i):
     plt.figure(i)
     real = self.z_data_raw.real
     imag = self.z_data_raw.imag
@@ -160,6 +165,7 @@ def myplot2(self,i):
     plt.ylabel('arg(|S21|)')
     plt.legend()
     # plt.show()
+
 
 def myfit(self, electric_delay=None, fcrop=None):
     '''
@@ -187,39 +193,64 @@ def myfit(self, electric_delay=None, fcrop=None):
                                            Qc=self.fitresults["absQc"], phi=self.fitresults["phi0"], a=1.0, alpha=0.,
                                            delay=0.)
     self._delay = delay
-    self._errors = [port1.fitresults['fr_err']*1e-3,port1.fitresults['Ql_err']*1e-3]
-    self._tests = [max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid])))*100,
-                   max(np.angle(port1.z_data) - (np.angle(port1.z_data_sim_norm[port1._fid])))*100,
+    self._errors = [port1.fitresults['fr_err'] * 1e-3, port1.fitresults['Ql_err'] * 1e-3]
+    self._tests = [max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid]))) * 100,
+                   max(np.angle(port1.z_data) - (np.angle(port1.z_data_sim_norm[port1._fid]))) * 100,
                    max(np.real(port1.z_data) - (np.real(port1.z_data_sim_norm[port1._fid]))) * 100,
                    max(np.imag(port1.z_data) - (np.imag(port1.z_data_sim_norm[port1._fid]))) * 100]
 
-if debug:
-    FreqFile=r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_freq.out'
-    DataFile=r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_-45.0_data.out'
+
+def search_dddelay(delay, radius=5e-8,
+                   resolution=3.5e-9):  # TODO: error when resolution is too small with relation to radius
+    diffs = {}
+    for d in np.arange(delay - radius, delay + radius, resolution):
+        myfit(port1, d)
+        diffs[d] = (port1._tests)
+    plt.plot(diffs.keys(), diffs.values(), '.')
+    plt.show(block=False)
+    sd = []
+    for x in diffs.values():
+        sd.append(sum(map(abs, x)))
+    dddelay = diffs.keys()[sd.index(min(sd))]
+    return dddelay
+
+
+def smart_search_delay(start_value, depth):
+    delay = start_value
+    radius = 1e-7
+    resolution = 1e-8
+    for level in range(1, depth):
+        delay = search_dddelay(delay, radius, resolution)
+        radius = radius * 1e-1
+        resolution = resolution * 1e-1
+    return delay
+
+
+if __name__ == '__main__':
+    if debug:
+        FreqFile = r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_freq.out'
+        DataFile = r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_-45.0_data.out'
+    else:
+        FreqFile = file_chooser('*_freq.out')
+        DataFile = file_chooser('*_data.out')
+
+    freq = np.loadtxt(FreqFile, delimiter=',')
+    dataRaw = np.loadtxt(DataFile, delimiter=',')
+    data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
+
+    port1 = circuit.notch_port()
+    port1.add_data(freq, data)
+    myfit(port1)
+    dddelay = smart_search_delay(port1._delay, 5)
+    port1.autofit(dddelay)
+    print dddelay, port1.fitresults
+    plt.figure(2)
+    plt.ion()
+    port1.plotall()
+    plt.figure(2)
+    plt.ioff()
+    port1.GUIfit()
+    print port1._delay
+    plt.show(block=True)
 else:
-    FreqFile=file_chooser('*_freq.out')
-    DataFile=file_chooser('*_data.out')
-
-freq = np.loadtxt(FreqFile,delimiter=',')
-dataRaw = np.loadtxt(DataFile,delimiter=',')
-data = dataRaw[0:-1:2]+1j*dataRaw[1::2]
-
-port1 = circuit.notch_port()
-port1.add_data(freq,data)
-myfit(port1)
-radius=5e-8
-resolution=0.2e-9
-diffs={}
-for d in np.arange(port1._delay-radius, port1._delay+radius, resolution):
-    myfit(port1,d)
-    diffs[d]=(port1._tests)
-plt.plot(diffs.values())
-plt.show()
-sd=[]
-for x in diffs.values():
-    sd.append(sum(map(abs,x))) #TODO: replace minimum of sum of errors to a better method
-dddelay = diffs.keys()[sd.index(min(sd))]
-port1.autofit(dddelay)
-print port1.fitresults
-port1.plotall()
-exit(0)
+    print 'cli gose here'
