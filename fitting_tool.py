@@ -7,9 +7,6 @@ from os.path import join
 import os
 import pprint
 from matplotlib import pyplot
-import peakutils
-from peakutils.plot import plot as pplot
-from scipy.signal import find_peaks_cwt
 
 global Scale
 Scale = 100
@@ -167,6 +164,32 @@ def myplot2(self, i):
     # plt.show()
 
 
+def myplotnorm(self):
+    real = np.real(self.z_data)
+    imag = np.imag(self.z_data)
+    real2 = np.real(self.z_data_sim_norm)
+    imag2 = np.imag(self.z_data_sim_norm)
+    plt.subplot(221)
+    plt.plot(real, imag, label='rawdata')
+    plt.plot(real2, imag2, label='fit')
+    plt.xlabel('Re(S21)')
+    plt.ylabel('Im(S21)')
+    plt.legend()
+    plt.subplot(222)
+    plt.plot(self.f_data * 1e-9, np.absolute(self.z_data), label='rawdata')
+    plt.plot(self.f_data * 1e-9, np.absolute(self.z_data_sim_norm), label='fit')
+    plt.xlabel('f (GHz)')
+    plt.ylabel('|S21|')
+    plt.legend()
+    plt.subplot(223)
+    plt.plot(self.f_data * 1e-9, np.angle(self.z_data), label='rawdata')
+    plt.plot(self.f_data * 1e-9, np.angle(self.z_data_sim_norm), label='fit')
+    plt.xlabel('f (GHz)')
+    plt.ylabel('arg(|S21|)')
+    plt.legend()
+    plt.show()
+
+
 def myfit(self, electric_delay=None, fcrop=None):
     '''
     automatic calibration and fitting
@@ -193,7 +216,11 @@ def myfit(self, electric_delay=None, fcrop=None):
                                            Qc=self.fitresults["absQc"], phi=self.fitresults["phi0"], a=1.0, alpha=0.,
                                            delay=0.)
     self._delay = delay
-    self._errors = [port1.fitresults['fr_err'] * 1e-3, port1.fitresults['Ql_err'] * 1e-3]
+    try:
+        self._errors = [port1.fitresults['fr_err'] * 1e-3, port1.fitresults[
+            'Ql_err'] * 1e-3]  # TODO: fix WARNING: Error calculation failed! originating in circuir.py line: 410 due to matrix A being singular
+    except KeyError:
+        self._errors = [None, None]
     self._tests = [max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid]))) * 100,
                    max(np.angle(port1.z_data) - (np.angle(port1.z_data_sim_norm[port1._fid]))) * 100,
                    max(np.real(port1.z_data) - (np.real(port1.z_data_sim_norm[port1._fid]))) * 100,
@@ -201,13 +228,15 @@ def myfit(self, electric_delay=None, fcrop=None):
 
 
 def search_dddelay(delay, radius=5e-8,
-                   resolution=3.5e-9):  # TODO: error when resolution is too small with relation to radius
+                   resolution=3.5e-9,
+                   verbose=False):  # TODO: error when resolution is too small with relation to radius
     diffs = {}
     for d in np.arange(delay - radius, delay + radius, resolution):
         myfit(port1, d)
         diffs[d] = (port1._tests)
-    plt.plot(diffs.keys(), diffs.values(), '.')
-    plt.show(block=False)
+    if verbose:
+        plt.plot(diffs.keys(), diffs.values(), '.')
+        plt.show(block=False)
     sd = []
     for x in diffs.values():
         sd.append(sum(map(abs, x)))
@@ -215,15 +244,33 @@ def search_dddelay(delay, radius=5e-8,
     return dddelay
 
 
-def smart_search_delay(start_value, depth):
+def smart_search_delay(start_value, depth, verbose=False):
     delay = start_value
     radius = 1e-7
     resolution = 1e-8
-    for level in range(1, depth):
-        delay = search_dddelay(delay, radius, resolution)
+    for level in range(1, depth + 1):
+        delay = search_dddelay(delay, radius, resolution, verbose)
         radius = radius * 1e-1
         resolution = resolution * 1e-1
     return delay
+
+
+def fit(FreqFile, DataFile, verbose=False):
+    try:
+        freq = np.loadtxt(FreqFile, delimiter=',')
+        dataRaw = np.loadtxt(DataFile, delimiter=',')
+    except IOError:
+        print 'ERROR: file not found'
+        exit(1)
+    data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
+
+    global port1
+    port1 = circuit.notch_port()
+    port1.add_data(freq, data)
+    myfit(port1)
+    dddelay = smart_search_delay(port1._delay, 3, verbose=verbose)
+    port1.autofit(dddelay)
+    return dddelay, port1.fitresults
 
 
 if __name__ == '__main__':
@@ -234,23 +281,25 @@ if __name__ == '__main__':
         FreqFile = file_chooser('*_freq.out')
         DataFile = file_chooser('*_data.out')
 
-    freq = np.loadtxt(FreqFile, delimiter=',')
-    dataRaw = np.loadtxt(DataFile, delimiter=',')
+    try:
+        freq = np.loadtxt(FreqFile, delimiter=',')
+        dataRaw = np.loadtxt(DataFile, delimiter=',')
+    except IOError:
+        print 'ERROR: file not found'
+        exit(1)
     data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
 
     port1 = circuit.notch_port()
     port1.add_data(freq, data)
     myfit(port1)
-    dddelay = smart_search_delay(port1._delay, 5)
+    dddelay = smart_search_delay(port1._delay, 3, verbose=True)  # TODO: expose depth to user via gui
     port1.autofit(dddelay)
     print dddelay, port1.fitresults
     plt.figure(2)
     plt.ion()
-    port1.plotall()
+    myplotnorm(port1)
     plt.figure(2)
     plt.ioff()
+    port1.autofit()
+    print port1._delay, '      ', port1.fitresults['fr']
     port1.GUIfit()
-    print port1._delay
-    plt.show(block=True)
-else:
-    print 'cli gose here'
