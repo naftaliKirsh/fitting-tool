@@ -87,7 +87,7 @@ def save_data(argument):
 
 def fit_data(argument):
     FreqFile, DataFile = save_data(argument)
-    fit__res = fitting_tool.fit2_0(FreqFile, DataFile, True)
+    fit__res = fitting_tool.fit(FreqFile, DataFile, True)
     # print '\t\t\t\t\t\'deley\':   \t\t\t\'fr\':   \t\t\t\'Ql\': '
     # print 'fitted:\t\t\t',
     # for val in fit__res:
