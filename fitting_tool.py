@@ -189,6 +189,54 @@ def myplotnorm(self):
     plt.legend()
     plt.show()
 
+def calculate_R_sqrered(y_data, y_model):
+    y_mean = np.mean(y_data)
+
+
+def mybaseline(self):
+    def GUIbaselinefit(self):
+        '''
+        A GUI to help you fit the baseline
+        '''
+        self.__lam = 1e6
+        self.__p = 0.9
+        niter = 10
+        self.__baseline = self._baseline_als(np.absolute(self.z_data_raw), self.__lam, self.__p, niter=niter)
+        import matplotlib.pyplot as plt
+        from matplotlib.widgets import Slider
+        fig, (ax0, ax1) = plt.subplots(nrows=2)
+        plt.suptitle('Use the sliders to make the green curve match the baseline.')
+        plt.subplots_adjust(left=0.25, bottom=0.25)
+        l0, = ax0.plot(np.absolute(self.z_data_raw))
+        l0b, = ax0.plot(np.absolute(self.__baseline))
+        l1, = ax1.plot(np.absolute(self.z_data_raw / self.__baseline))
+        ax0.set_ylabel('amp, rawdata vs. baseline')
+        ax1.set_ylabel('amp, corrected')
+        axcolor = 'lightgoldenrodyellow'
+        axSmooth = plt.axes([0.25, 0.1, 0.65, 0.03], axisbg=axcolor)
+        axAsym = plt.axes([0.25, 0.15, 0.65, 0.03], axisbg=axcolor)
+        axbcorr = plt.axes([0.25, 0.05, 0.65, 0.03], axisbg=axcolor)
+        sSmooth = Slider(axSmooth, 'Smoothness', 0.1, 10., valinit=np.log10(self.__lam), valfmt='1E%f')
+        sAsym = Slider(axAsym, 'Asymmetry', 1e-4, 0.99999, valinit=self.__p, valfmt='%f')
+        sbcorr = Slider(axbcorr, 'vertical shift', 0.7, 1.1, valinit=1.)
+
+        def update(val):
+            self.__lam = 10 ** sSmooth.val
+            self.__p = sAsym.val
+            self.__baseline = sbcorr.val * self._baseline_als(np.absolute(self.z_data_raw), self.__lam, self.__p,
+                                                              niter=niter)
+            l0.set_ydata(np.absolute(self.z_data_raw))
+            l0b.set_ydata(np.absolute(self.__baseline))
+            l1.set_ydata(np.absolute(self.z_data_raw / self.__baseline))
+            fig.canvas.draw_idle()
+
+        sSmooth.on_changed(update)
+        sAsym.on_changed(update)
+        sbcorr.on_changed(update)
+        plt.show()
+        self.z_data_raw /= self.__baseline
+        # plt.close()
+
 
 def myfit(self, electric_delay=None, fcrop=None):
     '''
@@ -227,14 +275,13 @@ def myfit(self, electric_delay=None, fcrop=None):
                    max(np.imag(port1.z_data) - (np.imag(port1.z_data_sim_norm[port1._fid]))) * 100]
 
 
-def search_dddelay(delay, radius=5e-8,
-                   resolution=3.5e-9,
-                   verbose=False):  # TODO: error when resolution is too small with relation to radius
+def search_dddelay(delay, radius=5e-8, resolution=3.5e-9, verbose=False):  # TODO: error when resolution is too small with relation to radius
     diffs = {}
     for d in np.arange(delay - radius, delay + radius, resolution):
         myfit(port1, d)
         diffs[d] = (port1._tests)
     if verbose:
+        plt.figure(2)
         plt.plot(diffs.keys(), diffs.values(), '.')
         plt.show(block=False)
     sd = []
@@ -242,6 +289,29 @@ def search_dddelay(delay, radius=5e-8,
         sd.append(sum(map(abs, x)))
     dddelay = diffs.keys()[sd.index(min(sd))]
     return dddelay
+
+
+def search_ccchi_square(delay, radius=5e-8,
+                   resolution=3.5e-9,
+                   verbose=False):  # TODO: error when resolution is too small with relation to radius
+    diffs = {}
+    diffs1 = {}
+    for d in np.arange(delay - radius, delay + radius, resolution):
+        myfit(port1, d)
+        try:
+            diffs[d] = (port1.fitresults['chi_square'])
+            # diffs1[d] = (port1.fitresults['fr'])
+        except:
+            pass
+    if verbose:
+        plt.plot(diffs.keys(), diffs.values(), '.')
+        # plt.plot(diffs.keys(), diffs1.values(), '.')
+        plt.show(block=False)
+    # sd = []
+    # for x in diffs.values():
+    #     # sd.append(sum(map(abs, x)))
+    #     ccchi_square = diffs.keys()[sd.index(min(sd))]
+    # return ccchi_square
 
 
 def smart_search_delay(start_value, depth, verbose=False):
@@ -267,10 +337,51 @@ def fit(FreqFile, DataFile, verbose=False):
     global port1
     port1 = circuit.notch_port()
     port1.add_data(freq, data)
+    # port1.autofit()
+    plt.figure(2)
     myfit(port1)
+    plt.figure(2)
     dddelay = smart_search_delay(port1._delay, 3, verbose=verbose)
     port1.autofit(dddelay)
-    return dddelay, port1.fitresults
+    plt.figure(3)
+    plt.ion()
+    port1.plotall()
+    return port1._delay, port1.fitresults
+
+
+
+def fit2_0(FreqFile, DataFile, verbose=False):
+    try:
+        freq = np.loadtxt(FreqFile, delimiter=',')
+        dataRaw = np.loadtxt(DataFile, delimiter=',')
+    except IOError:
+        print 'ERROR: file not found'
+        exit(1)
+    data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
+
+    global port1
+    port1 = circuit.notch_port()
+    port1.add_data(freq, data)
+    delay_initial_guess = port1._guess_delay(port1.f_data, port1.z_data_raw)
+    A1, A2, A3, A4, fr, Ql = port1._fit_skewed_lorentzian(port1.f_data, port1.z_data_raw)
+    delay_third_guess = port1._fit_delay(port1.f_data, port1.z_data_raw, delay_initial_guess, maxiter=5)
+    delay, amp_norm, alpha, fr_, Ql_, A2_, frcal = \
+        port1.do_calibration(port1.f_data, port1.z_data_raw ,fixed_delay=delay_third_guess) # index in funcrion may be wrong circuit.py line 332 to line 341
+    port1.z_data = port1.do_normalization(port1.f_data, port1.z_data_raw, delay_third_guess, amp_norm, alpha, A2_, fr)
+    xc, yc, r0 = port1._fit_circle(port1.z_data)
+    absQc = Ql / (2. * r0)
+    phi0 = -np.arcsin(yc / r0)
+    results = port1.circlefit(port1.f_data, port1.z_data, fr, Ql)
+    delay = smart_search_delay(delay_third_guess, 4)
+    # port1.z_data_sim = A2 * (port1.f_data - fr) + port1._S21_notch(port1.f_data, fr, Ql, Qc=port1.fitresults["absQc"],
+    #                                                                phi=port1.fitresults["phi0"], a=amp_norm, alpha=alpha,
+    #                                                                delay=delay)
+    # port1.z_data_sim_norm = port1._S21_notch(port1.f_data, fr=port1.fitresults["fr"], Ql=port1.fitresults["Ql"],
+    #                                        Qc=port1.fitresults["absQc"], phi=port1.fitresults["phi0"], a=1.0, alpha=0.,
+    #                                        delay=0.)
+    # plt.figure(2)
+    # port1.plotall()
+    return delay ,fr, Ql, absQc, phi0, results
 
 
 if __name__ == '__main__':
@@ -291,15 +402,24 @@ if __name__ == '__main__':
 
     port1 = circuit.notch_port()
     port1.add_data(freq, data)
-    myfit(port1)
-    dddelay = smart_search_delay(port1._delay, 3, verbose=True)  # TODO: expose depth to user via gui
-    port1.autofit(dddelay)
-    print dddelay, port1.fitresults
-    plt.figure(2)
-    plt.ion()
-    myplotnorm(port1)
-    plt.figure(2)
-    plt.ioff()
-    port1.autofit()
-    print port1._delay, '      ', port1.fitresults['fr']
-    port1.GUIfit()
+    print fit2_0(FreqFile, DataFile)
+    # port1.autofit()
+    # print port1._delay, port1.fitresults
+    # port1.plotall()
+    # myfit(port1)
+    # search_ccchi_square(port1._delay,1,1e-4,verbose=True)
+    # plt.show()
+    # dddelay = smart_search_delay(port1._delay, 4, verbose=True)  # TODO: expose depth to user via gui
+    # port1.autofit(dddelay)
+    # print dddelay, port1.fitresults
+    # plt.figure(2)
+    # plt.ion()
+    # myplotnorm(port1)
+    # plt.figure(2)
+    # port1.autofit()
+    # print port1._delay, port1.fitresults
+    # plt.ioff()
+    # # plt.close()
+    # # plt.close()
+    # # port1.GUIbaselinefit()
+    # port1.GUIfit()
