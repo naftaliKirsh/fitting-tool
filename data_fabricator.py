@@ -83,7 +83,7 @@ def save_data(argument):
         out = zip(names, values)
         fo.write(str(out))
     return root.filename + '_freq.out', root.filename + '_data.out'
-
+#TODO: fix gain value in params file
 
 def fit_data(argument):
     FreqFile, DataFile = save_data(argument)

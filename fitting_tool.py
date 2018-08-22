@@ -207,14 +207,14 @@ def myfit(self, electric_delay=None, fcrop=None):
     self.z_data = self.do_normalization(self.f_data, self.z_data_raw, delay, amp_norm, alpha, A2, frcal)
     self.fitresults = self.circlefit(self.f_data[self._fid], self.z_data[self._fid], fr, Ql, refine_results=False,
                                      calc_errors=True)
-    self.z_data_sim = A2 * (self.f_data - frcal) + self._S21_notch(self.f_data, fr=self.fitresults["fr"],
-                                                                   Ql=self.fitresults["Ql"],
-                                                                   Qc=self.fitresults["absQc"],
-                                                                   phi=self.fitresults["phi0"], a=amp_norm, alpha=alpha,
-                                                                   delay=delay)
-    self.z_data_sim_norm = self._S21_notch(self.f_data, fr=self.fitresults["fr"], Ql=self.fitresults["Ql"],
-                                           Qc=self.fitresults["absQc"], phi=self.fitresults["phi0"], a=1.0, alpha=0.,
-                                           delay=0.)
+    # self.z_data_sim = A2 * (self.f_data - frcal) + self._S21_notch(self.f_data, fr=self.fitresults["fr"],
+    #                                                                Ql=self.fitresults["Ql"],
+    #                                                                Qc=self.fitresults["absQc"],
+    #                                                                phi=self.fitresults["phi0"], a=amp_norm, alpha=alpha,
+    #                                                                delay=delay)
+    # self.z_data_sim_norm = self._S21_notch(self.f_data, fr=self.fitresults["fr"], Ql=self.fitresults["Ql"],
+    #                                        Qc=self.fitresults["absQc"], phi=self.fitresults["phi0"], a=1.0, alpha=0.,
+    #                                        delay=0.)
     self._delay = delay
     try:
         self._errors = [port1.fitresults['fr_err'] * 1e-3, port1.fitresults[
@@ -225,6 +225,51 @@ def myfit(self, electric_delay=None, fcrop=None):
                    max(np.angle(port1.z_data) - (np.angle(port1.z_data_sim_norm[port1._fid]))) * 100,
                    max(np.real(port1.z_data) - (np.real(port1.z_data_sim_norm[port1._fid]))) * 100,
                    max(np.imag(port1.z_data) - (np.imag(port1.z_data_sim_norm[port1._fid]))) * 100]
+
+
+def my_fit_skewed_lorentzian(self, f_data, z_data): #TODO: fix lorentzian fitter
+    amplitude = np.absolute(z_data)
+    amplitude_sqr = amplitude ** 2
+    A1a = np.minimum(amplitude_sqr[0], amplitude_sqr[-1])
+    A3a = -np.max(amplitude_sqr)
+    fra = f_data[np.argmin(amplitude_sqr)]
+
+    def residuals(p, x, y):
+        A2, A4, Ql = p
+        err = y - (A1a + A2 * (x - fra) + (A3a + A4 * (x - fra)) / (1. + 4. * Ql ** 2 * ((x - fra) / fra) ** 2))
+        return err
+
+    p0 = [0., 0., 1e3] #TODO: try gessing values for e.g. A2 from liniar fit
+    # p_final = spopt.leastsq(residuals, p0, args=(np.array(f_data), np.array(amplitude_sqr)))
+    p_final = spopt.least_squares(residuals, p0, args=(np.array(f_data), np.array(amplitude_sqr)), bounds=(0, np.inf))
+    A2a, A4a, Qla = p_final['x']
+
+    def residuals2(p, x, y):
+        A1, A2, A3, A4, fr, Ql = p
+        err = y - (A1 + A2 * (x - fr) + (A3 + A4 * (x - fr)) / (1. + 4. * Ql ** 2 * ((x - fr) / fr) ** 2))
+        return err
+
+    def fitfunc(x, A1, A2, A3, A4, fr, Ql):
+        return A1 + A2 * (x - fr) + (A3 + A4 * (x - fr)) / (1. + 4. * Ql ** 2 * ((x - fr) / fr) ** 2)
+
+    p0 = [A1a, A2a, A3a, A4a, fra, Qla]
+    # p_final = spopt.leastsq(residuals2,p0,args=(np.array(f_data),np.array(amplitude_sqr)))
+    try:
+        popt, pcov = spopt.curve_fit(fitfunc, np.array(f_data), np.array(amplitude_sqr), p0=p0, method='dogbox')
+        # A1, A2, A3, A4, fr, Ql = p_final[0]
+        # print(p_final[0][5])
+        if pcov is not None:
+            self.df_error = np.sqrt(pcov[4][4])
+            self.dQl_error = np.sqrt(pcov[5][5])
+        else:
+            self.df_error = np.inf
+            self.dQl_error = np.inf
+    except:
+        popt = p0
+        self.df_error = np.inf
+        self.dQl_error = np.inf
+    # return p_final[0]
+    return popt
 
 
 def search_dddelay(delay, radius=5e-8,
@@ -244,12 +289,40 @@ def search_dddelay(delay, radius=5e-8,
     return dddelay
 
 
+def search_chisqr(delay, radius=5e-8,
+                   resolution=3.5e-9,
+                   verbose=False):  # TODO: error when resolution is too small with relation to radius
+    diffs = {}
+    for d in np.arange(delay - radius, delay + radius, resolution):
+        myfit(port1, d)
+        try:
+            diffs[d] = (port1.fitresults['chi_square'])
+        except:
+            pass
+    if verbose:
+        plt.plot(diffs.keys(), diffs.values(), '.')
+        plt.show(block=False)
+    dddelay = diffs.keys()[diffs.values().index(min(diffs.values()))]
+    return dddelay
+
+
 def smart_search_delay(start_value, depth, verbose=False):
     delay = start_value
     radius = 1e-7
     resolution = 1e-8
     for level in range(1, depth + 1):
         delay = search_dddelay(delay, radius, resolution, verbose)
+        radius = radius * 1e-1
+        resolution = resolution * 1e-1
+    return delay
+
+
+def smart_search_chisqr(start_value, depth, verbose=False):
+    delay = start_value
+    radius = 1e-5
+    resolution = 1e-6
+    for level in range(1, depth + 1):
+        delay = search_chisqr(delay, radius, resolution, verbose)
         radius = radius * 1e-1
         resolution = resolution * 1e-1
     return delay
@@ -291,15 +364,22 @@ if __name__ == '__main__':
 
     port1 = circuit.notch_port()
     port1.add_data(freq, data)
+
+    port1.autofit()
     myfit(port1)
-    dddelay = smart_search_delay(port1._delay, 3, verbose=True)  # TODO: expose depth to user via gui
+    dddelay = smart_search_chisqr(port1._delay, 7, verbose=True)  # TODO: expose depth to user via gui
     port1.autofit(dddelay)
+    maxval = np.max(np.absolute(port1.z_data_raw))
+    z_data = port1.z_data_raw / maxval
+    print my_fit_skewed_lorentzian(port1, port1.f_data, z_data)
     print dddelay, port1.fitresults
+
     plt.figure(2)
     plt.ion()
     myplotnorm(port1)
     plt.figure(2)
     plt.ioff()
+    #just to see the difference:
     port1.autofit()
-    print port1._delay, '      ', port1.fitresults['fr']
+    print port1._delay, port1.fitresults
     port1.GUIfit()
