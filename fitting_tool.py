@@ -367,7 +367,7 @@ if __name__ == '__main__':
 
     port1.autofit()
     myfit(port1)
-    dddelay = smart_search_chisqr(port1._delay, 7, verbose=True)  # TODO: expose depth to user via gui
+    dddelay = smart_search_chisqr(port1._delay, 7)  # TODO: expose depth to user via gui
     port1.autofit(dddelay)
     maxval = np.max(np.absolute(port1.z_data_raw))
     z_data = port1.z_data_raw / maxval
