@@ -13,6 +13,16 @@ def find_nearest_neighbor(array, value):
     return idx
 
 
+def find_slope(x_data=list, y_data=list, point=(None,None)):
+    try:
+        point_index = x_data.index(point[0])
+    except:
+        raise IndexError('the inquierd poin is not in the data')
+    gradient = np.gradient(z_data_normalized.real)
+    gradient[point_index]
+    slope = 1
+    return slope
+
 def residuals(p, x, y):
     A2, A4, Ql = p
     err = y - (A1a + A2 * (x - fra) + (A3a + A4 * (x - fra)) / (1. + 4. * Ql ** 2 * ((x - fra) / fra) ** 2))
@@ -92,11 +102,11 @@ def A3(A1):
 
 A1 = results[0][2]
 A3 = A3(A1)
-magic_point_z_value = z_data_normalized.real[find_nearest_neighbor(z_data_normalized.real, A1 + A3)]
-if maximum(0)>minimum(0):
-    fr = port1.f_data.index(magic_point_z_value, -1)
+magic_point_nearest_neighbor_index = find_nearest_neighbor(z_data_normalized.real, A1 + A3)
+if maximum[0] > minimum[0]:
+    fr = port1.f_data[z_data_normalized.real.tolist().index(magic_point_nearest_neighbor_index, -1)]
 else:
-    fr = port1.f_data.index(magic_point_z_value, 0)
+    fr = port1.f_data[z_data_normalized.real.tolist().index(magic_point_nearest_neighbor_index, 0)]
 
 
 initial_values = [results[0][2], 0, A3(results[0][2]), 1, minimum[0], 1]
