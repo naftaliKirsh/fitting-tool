@@ -1,10 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.optimize as scopt
+import scipy.stats as stats
 from resonator_tools import circuit
+from scipy.interpolate import UnivariateSpline
 
-DATA_FILE = r'C:\Users\Owner\PycharmProjects\fitting-tool\temp\LORENTZIAN_data.out'
-FREQ_FILE = r'C:\Users\Owner\PycharmProjects\fitting-tool\temp\LORENTZIAN_freq.out'
 
 
 def find_nearest_neighbor(array, value):
@@ -13,15 +12,16 @@ def find_nearest_neighbor(array, value):
     return idx
 
 
-def find_slope(x_data=list, y_data=list, point=(None,None)):
+def find_slope(x_data=list, y_data=list, point=(None, None)):
     try:
         point_index = x_data.index(point[0])
     except:
         raise IndexError('the inquierd poin is not in the data')
-    gradient = np.gradient(z_data_normalized.real)
-    gradient[point_index]
-    slope = 1
-    return slope
+    radius = np.abs(y_data.index(np.min(y_data)) - point_index)
+    linear_regression_fit = stats.linregress(x_data[point_index - radius:point_index + radius + 1],
+                                             y_data[point_index - radius:point_index + radius + 1])
+    return linear_regression_fit.slope
+
 
 def residuals(p, x, y):
     A2, A4, Ql = p
@@ -30,7 +30,7 @@ def residuals(p, x, y):
 
 
 def fitfunc(x, A1, A2, A3, A4, fr, Ql):
-    return A1 + 0 * (x - fr) + (A3 + A4 * (x - fr)) / (1. + 4. * Ql ** 2 * ((
+    return A1 + A2 * (x - fr) + (A3 + A4 * (x - fr)) / (1. + 4. * Ql ** 2 * ((
                                                                                     x - fr) / fr) ** 2)  # TODO: change 0 to A2 and fit A2 using a averaged weighted linear fit of the tail ends then average the slopes
 
 
@@ -46,80 +46,84 @@ def linear(x, a, b):
     return a + b * x
 
 
-try:
-    freq = np.loadtxt(FREQ_FILE, delimiter=',')
-    dataRaw = np.loadtxt(DATA_FILE, delimiter=',')
-except IOError:
-    print 'ERROR: file not found'
-    exit(1)
+def fit(port1):
+    z_data_normalized_original = port1.z_data_raw / np.max(np.absolute(port1.z_data_raw))
+    linreg = stats.linregress(port1.f_data, z_data_normalized_original.real)
+    z_data_stratened = z_data_normalized_original.real-linreg.slope*port1.f_data-linreg.intercept
+    dist = np.abs(z_data_normalized_original[list(z_data_stratened).index(np.min(z_data_stratened))].real-np.min(z_data_stratened.real))
+    z_data_normalized_stratened = z_data_stratened + dist
 
-data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
+    amplitude = np.absolute(z_data_normalized_stratened)
+    amplitude_sqr = amplitude ** 2
+    global A1a
+    A1a = np.minimum(amplitude_sqr[0], amplitude_sqr[-1])
+    global A3a
+    A3a = np.min(amplitude_sqr)
+    global fra
+    fra = port1.f_data[np.argmin(amplitude_sqr)]
 
-port1 = circuit.notch_port()
-port1.add_data(freq, data)
+    minimum = (port1.f_data[np.argmin(z_data_normalized_stratened.real)], np.min(z_data_normalized_stratened.real))
+    maximum = (port1.f_data[np.argmax(z_data_normalized_stratened.real)], np.max(z_data_normalized_stratened.real))
+    left_tail_f_data = port1.f_data[0: np.argmin(z_data_normalized_stratened.real)]
+    left_tail_z_data = z_data_normalized_stratened[0: np.argmin(z_data_normalized_stratened.real)]
 
-z_data_normalized = port1.z_data_raw / np.max(np.absolute(port1.z_data_raw))
-plt.plot(port1.f_data, z_data_normalized.real)
-
-amplitude = np.absolute(z_data_normalized)
-amplitude_sqr = amplitude ** 2
-A1a = np.minimum(amplitude_sqr[0], amplitude_sqr[-1])
-A3a = np.min(amplitude_sqr)
-fra = port1.f_data[np.argmin(amplitude_sqr)]
-
-minimum = (port1.f_data[np.argmin(z_data_normalized.real)], np.min(z_data_normalized.real))
-maximum = (port1.f_data[np.argmax(z_data_normalized.real)], np.max(z_data_normalized.real))
-left_tail_f_data = port1.f_data[0: np.argmin(z_data_normalized.real)]
-left_tail_z_data = z_data_normalized[0: np.argmin(z_data_normalized.real)]
-
-right_tail_f_data = port1.f_data[np.argmax(z_data_normalized.real):-1]
-right_tail_z_data = z_data_normalized[np.argmax(z_data_normalized.real):-1]
-
-plt.figure(2)
-plt.plot(right_tail_f_data, right_tail_z_data.real)
-plt.plot(left_tail_f_data, left_tail_z_data.real)
-
-resultsL = scopt.curve_fit(a_over_x, left_tail_f_data, left_tail_z_data.real, p0=[1, minimum[0], A1a])
-errL = np.sqrt(np.diag(resultsL[1]))
-plt.plot(left_tail_f_data, a_over_x(left_tail_f_data, resultsL[0][0], resultsL[0][1], resultsL[0][2]))
-
-resultsR = scopt.curve_fit(a_over_x, right_tail_f_data, right_tail_z_data.real,
-                           p0=[1, maximum[0], z_data_normalized.real[-1]])
-errR = np.sqrt(np.diag(resultsR[1]))
-plt.plot(right_tail_f_data, a_over_x(right_tail_f_data, resultsR[0][0], resultsR[0][1], resultsR[0][2]))
-
-if errL[2] < errR[2]:
-    results = resultsL
-    err = errL
-else:
-    results = resultsR
-    err = errR
+    right_tail_f_data = port1.f_data[np.argmax(z_data_normalized_stratened.real):-1]
+    right_tail_z_data = z_data_normalized_stratened[np.argmax(z_data_normalized_stratened.real):-1]
 
 
-def A3(A1):
-    return minimum[1] + maximum[1] - 2 * A1
+    resultsL = scopt.curve_fit(a_over_x, left_tail_f_data, left_tail_z_data.real,
+                               p0=[1, minimum[0], np.random.uniform(np.minimum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), np.maximum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), 1)],
+                               bounds=([-np.inf, -np.inf, np.minimum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1])],
+                                       [np.inf, np.inf, np.maximum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1])]))
+    errL = np.sqrt(np.diag(resultsL[1]))
+    try:
+        resultsR = scopt.curve_fit(a_over_x, right_tail_f_data, right_tail_z_data.real,
+                                   p0=[1, maximum[0], np.random.uniform(np.minimum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), np.maximum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), 1)],
+                                   bounds=([-np.inf, -np.inf, np.minimum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1])],
+                                           [np.inf, np.inf, np.maximum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1])]))
+        errR = np.sqrt(np.diag(resultsR[1]))
+    except ValueError:
+        errR = [None, None, None]
+        errR[2] = np.inf
 
 
-A1 = results[0][2]
-A3 = A3(A1)
-magic_point_nearest_neighbor_index = find_nearest_neighbor(z_data_normalized.real, A1 + A3)
-if maximum[0] > minimum[0]:
-    fr = port1.f_data[z_data_normalized.real.tolist().index(magic_point_nearest_neighbor_index, -1)]
-else:
-    fr = port1.f_data[z_data_normalized.real.tolist().index(magic_point_nearest_neighbor_index, 0)]
+    if errL[2] <= errR[2]:
+        results = resultsL
+        err = errL
+    else:
+        results = resultsR
+        err = errR
 
 
-initial_values = [results[0][2], 0, A3(results[0][2]), 1, minimum[0], 1]
-fit_results = scopt.curve_fit(fitfunc, port1.f_data, z_data_normalized.real, p0=initial_values,
-                              bounds=([np.minimum(z_data_normalized.real[0], z_data_normalized.real[-1]), -np.inf,
-                                       np.minimum(A3(z_data_normalized.real[0]), A3(z_data_normalized.real[-1])),
-                                       -np.inf, minimum[0], -np.inf],
-                                      [np.maximum(z_data_normalized.real[0], z_data_normalized.real[-1]), np.inf,
-                                       np.maximum(A3(z_data_normalized.real[0]), A3(z_data_normalized.real[-1])),
-                                       np.inf, maximum[0], np.inf]))
+    def _A3(A1):
+        return minimum[1] + maximum[1] - 2 * A1
 
-plt.figure(1)
-plt.plot(port1.f_data, fitfunc(port1.f_data, fit_results[0][0], fit_results[0][1], fit_results[0][2], fit_results[0][3],
-                               fit_results[0][4], fit_results[0][5]))
-plt.show(block=False)
-exit(0)
+
+    A1 = results[0][2]
+    A2 = linreg.slope
+    A3 = _A3(A1)
+    if maximum[0] > minimum[0]:
+        idx = find_nearest_neighbor(z_data_normalized_stratened.real[list(port1.f_data).index(minimum[0]):], A1 + A3) + len(
+            z_data_normalized_stratened.real[0:list(port1.f_data).index(minimum[0])]) + 1
+        fr = port1.f_data[idx]
+    else:
+        idx = find_nearest_neighbor(z_data_normalized_stratened.real[0:list(port1.f_data).index(minimum[0])], A1 + A3)
+        fr = port1.f_data[idx]
+    A4 = find_slope(list(port1.f_data), list(z_data_normalized_stratened.real), (fr, A1 + A3))
+    spline = UnivariateSpline(port1.f_data, z_data_normalized_stratened.real-A1+np.abs(np.min(z_data_normalized_stratened.real-A1))*0.5, s=0)
+    roots = spline.roots()
+    Ql = fr/np.abs(roots[1]-roots[0])
+
+    # if not (np.maximum(minimum[0], maximum[0]) > fr and fr > np.minimum(minimum[0], maximum[0])):
+    #     fr = np.random.uniform(np.minimum(minimum[0], maximum[0]), np.maximum(minimum[0], maximum[0]), 1)
+    initial_values = [A1, 0, A3, A4, fr, Ql]
+    fit_results = scopt.curve_fit(fitfunc, port1.f_data, z_data_normalized_original.real, p0=initial_values,
+                                  bounds=([np.minimum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), -np.abs(A2),
+                                           np.minimum(_A3(z_data_normalized_stratened.real[0]), _A3(z_data_normalized_stratened.real[-1])),
+                                           -np.inf, np.minimum(minimum[0], maximum[0]), 0],
+                                          [np.maximum(z_data_normalized_stratened.real[0], z_data_normalized_stratened.real[-1]), np.abs(A2),
+                                           np.maximum(_A3(z_data_normalized_stratened.real[0]), _A3(z_data_normalized_stratened.real[-1])),
+                                           np.inf, np.maximum(minimum[0], maximum[0]), np.inf]))
+
+    return fit_results[0]
+

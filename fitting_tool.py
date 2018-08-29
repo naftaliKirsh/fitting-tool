@@ -3,6 +3,9 @@ import numpy as np
 import Tkinter, tkFileDialog
 import matplotlib.pyplot as plt
 import scipy.optimize as spopt
+from resonator_tools.circuit import notch_port
+
+import skewed_lorentzian_fitter as slf
 from os.path import join
 import os
 import pprint
@@ -345,6 +348,10 @@ def fit(FreqFile, DataFile, verbose=False):
     port1.autofit(dddelay)
     return dddelay, port1.fitresults
 
+# class my_notch_port(circuit.notch_port):
+#
+#     def _fit_skewed_lorentzian(self,f_data,z_data):
+#         return slf.fit(self)
 
 if __name__ == '__main__':
     if debug:
@@ -362,8 +369,9 @@ if __name__ == '__main__':
         exit(1)
     data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
 
-    port1 = circuit.notch_port()
+    port1 = circuit.notch_port()#my_notch_port()
     port1.add_data(freq, data)
+    popt = slf.fit(port1)
 
     port1.autofit()
     myfit(port1)
@@ -383,3 +391,4 @@ if __name__ == '__main__':
     port1.autofit()
     print port1._delay, port1.fitresults
     port1.GUIfit()
+
