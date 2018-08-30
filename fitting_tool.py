@@ -311,11 +311,11 @@ def search_chisqr(delay, radius=5e-8,
 
 def smart_search_delay(start_value, depth, verbose=False):
     delay = start_value
-    radius = 1e-7
+    radius = 1e-7*2
     resolution = 1e-8
     for level in range(1, depth + 1):
         delay = search_dddelay(delay, radius, resolution, verbose)
-        radius = radius * 1e-1
+        radius = radius * 1e-1/2
         resolution = resolution * 1e-1
     return delay
 
@@ -348,10 +348,10 @@ def fit(FreqFile, DataFile, verbose=False):
     port1.autofit(dddelay)
     return dddelay, port1.fitresults
 
-# class my_notch_port(circuit.notch_port):
-#
-#     def _fit_skewed_lorentzian(self,f_data,z_data):
-#         return slf.fit(self)
+class my_notch_port(circuit.notch_port):
+
+    def _fit_skewed_lorentzian(self,f_data,z_data):
+        return slf.fit(self)
 
 if __name__ == '__main__':
     if debug:
@@ -369,18 +369,17 @@ if __name__ == '__main__':
         exit(1)
     data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
 
-    port1 = circuit.notch_port()#my_notch_port()
+    port1 = my_notch_port()
     port1.add_data(freq, data)
-    popt = slf.fit(port1)
 
     port1.autofit()
     myfit(port1)
-    dddelay = smart_search_chisqr(port1._delay, 7)  # TODO: expose depth to user via gui
-    port1.autofit(dddelay)
+    # dddelay = smart_search_chisqr(port1._delay, 14, verbose=True)  # TODO: expose depth to user via gui
+    port1.autofit(0)
     maxval = np.max(np.absolute(port1.z_data_raw))
     z_data = port1.z_data_raw / maxval
     print my_fit_skewed_lorentzian(port1, port1.f_data, z_data)
-    print dddelay, port1.fitresults
+    print 0, port1.fitresults
 
     plt.figure(2)
     plt.ion()
@@ -388,7 +387,11 @@ if __name__ == '__main__':
     plt.figure(2)
     plt.ioff()
     #just to see the difference:
-    port1.autofit()
+    port1 = circuit.notch_port()
+    port1.add_data(freq, data)
+    port1.autofit(0)
     print port1._delay, port1.fitresults
+    plt.figure(7)
+    myplotnorm(port1)
     port1.GUIfit()
 
