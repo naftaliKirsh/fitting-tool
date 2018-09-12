@@ -1,0 +1,9 @@
+script: pwr_sweep_nums5.7.py
+IF bandwith: 1000.0 Hz
+Number of points: 801.0
+Spans: [9000.0, 5000.0] [kHz]
+Averaging off.
+Resonances scanned: ['121.375e6', '66.475e6'] Hz
+Power levels scanned: [-30.  -27.5 -25.  -22.5 -20. ] dBm
+Time waited at each power level: [3, 3, 3, 3, 3] seconds
+Note:PowerSweep on all resonators, including the doubtful ones
