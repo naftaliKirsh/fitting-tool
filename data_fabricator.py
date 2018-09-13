@@ -52,6 +52,9 @@ def update(val):
 
 
 def save_data(argument):
+    S_21 = a * np.exp(1j * alpha) * np.exp(-2 * np.pi * 1j * f * delay) * (
+            1 - ((Ql / np.abs(Qc) * np.exp(1j * phi)) / (1 + 2j * Ql * (f / fr - 1))))
+    S_21 = S_21 + ((noiseRe + 1j * noiseIm) * gain)
     root = tk.Tk()
     root.withdraw()
     root.filename = tkFileDialog.asksaveasfilename(initialdir=".", title="Select location and enter file name")
