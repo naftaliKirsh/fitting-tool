@@ -230,7 +230,7 @@ def myfit(self, electric_delay=None, fcrop=None):
                    max(np.imag(port1.z_data) - (np.imag(port1.z_data_sim_norm[port1._fid]))) * 100]
 
 
-def my_fit_skewed_lorentzian(self, f_data, z_data): #TODO: fix lorentzian fitter
+def my_fit_skewed_lorentzian(self, f_data, z_data):  # TODO: fix lorentzian fitter
     amplitude = np.absolute(z_data)
     amplitude_sqr = amplitude ** 2
     A1a = np.minimum(amplitude_sqr[0], amplitude_sqr[-1])
@@ -242,7 +242,7 @@ def my_fit_skewed_lorentzian(self, f_data, z_data): #TODO: fix lorentzian fitter
         err = y - (A1a + A2 * (x - fra) + (A3a + A4 * (x - fra)) / (1. + 4. * Ql ** 2 * ((x - fra) / fra) ** 2))
         return err
 
-    p0 = [0., 0., 1e3] #TODO: try gessing values for e.g. A2 from liniar fit
+    p0 = [0., 0., 1e3]  # TODO: try gessing values for e.g. A2 from liniar fit
     # p_final = spopt.leastsq(residuals, p0, args=(np.array(f_data), np.array(amplitude_sqr)))
     p_final = spopt.least_squares(residuals, p0, args=(np.array(f_data), np.array(amplitude_sqr)), bounds=(0, np.inf))
     A2a, A4a, Qla = p_final['x']
@@ -293,8 +293,8 @@ def search_dddelay(delay, radius=5e-8,
 
 
 def search_chisqr(delay, radius=5e-8,
-                   resolution=3.5e-9,
-                   verbose=False):  # TODO: error when resolution is too small with relation to radius
+                  resolution=3.5e-9,
+                  verbose=False):  # TODO: error when resolution is too small with relation to radius
     diffs = {}
     for d in np.arange(delay - radius, delay + radius, resolution):
         myfit(port1, d)
@@ -311,11 +311,11 @@ def search_chisqr(delay, radius=5e-8,
 
 def smart_search_delay(start_value, depth, verbose=False):
     delay = start_value
-    radius = 1e-7*2
+    radius = 1e-7 * 2
     resolution = 1e-8
     for level in range(1, depth + 1):
         delay = search_dddelay(delay, radius, resolution, verbose)
-        radius = radius * 1e-1/2
+        radius = radius * 1e-1 / 2
         resolution = resolution * 1e-1
     return delay
 
@@ -348,10 +348,71 @@ def fit(FreqFile, DataFile, verbose=False):
     port1.autofit(dddelay)
     return dddelay, port1.fitresults
 
+
 class my_notch_port(circuit.notch_port):
 
-    def _fit_skewed_lorentzian(self,f_data,z_data):
+    def _fit_skewed_lorentzian(self, f_data, z_data):
         return slf.fit(self)
+
+    def circlefit(self, f_data, z_data, fr=None, Ql=None, refine_results=False, calc_errors=True):
+
+        if fr is None: fr = f_data[np.argmin(np.absolute(z_data))]
+        if Ql is None: Ql = 1e6
+        xc, yc, r0 = self._fit_circle(z_data, refine_results=refine_results)
+        if xc-1 < 0:
+            phi0 = -np.arcsin(yc / r0)
+        else:
+            phi0 = np.arcsin((yc/r0))+np.pi
+        theta0 = self._periodic_boundary(phi0 + np.pi, np.pi)
+        z_data_corr = self._center(z_data, np.complex(xc, yc))
+        theta0, Ql, fr = self._phase_fit(f_data, z_data_corr, theta0, Ql, fr)
+        # print("Ql from phasefit is: " + str(Ql))
+        absQc = Ql / (2. * r0)
+        complQc = absQc * np.exp(1j * ((-1.) * phi0))
+        Qc = 1. / (1. / complQc).real  # here, taking the real part of (1/complQc) from diameter correction method
+        Qi_dia_corr = 1. / (1. / Ql - 1. / Qc)
+        Qi_no_corr = 1. / (1. / Ql - 1. / absQc)
+
+        results = {"Qi_dia_corr": Qi_dia_corr, "Qi_no_corr": Qi_no_corr, "absQc": absQc, "Qc_dia_corr": Qc, "Ql": Ql,
+                   "fr": fr, "theta0": theta0, "phi0": phi0}
+
+        # calculation of the error
+        p = [fr, absQc, Ql, phi0]
+        # chi_square, errors = rt.get_errors(rt.residuals_notch_ideal,f_data,z_data,p)
+        if calc_errors == True:
+            chi_square, cov = self._get_cov_fast_notch(f_data, z_data, p)
+            # chi_square, cov = rt.get_cov(rt.residuals_notch_ideal,f_data,z_data,p)
+
+            if cov is not None:
+                errors = np.sqrt(np.diagonal(cov))
+                fr_err, absQc_err, Ql_err, phi0_err = errors
+                # calc Qi with error prop (sum the squares of the variances and covariaces)
+                dQl = 1. / ((1. / Ql - 1. / absQc) ** 2 * Ql ** 2)
+                dabsQc = - 1. / ((1. / Ql - 1. / absQc) ** 2 * absQc ** 2)
+                Qi_no_corr_err = np.sqrt((dQl ** 2 * cov[2][2]) + (dabsQc ** 2 * cov[1][1]) + (
+                            2 * dQl * dabsQc * cov[2][1]))  # with correlations
+                # calc Qi dia corr with error prop
+                dQl = 1 / ((1 / Ql - np.cos(phi0) / absQc) ** 2 * Ql ** 2)
+                dabsQc = -np.cos(phi0) / ((1 / Ql - np.cos(phi0) / absQc) ** 2 * absQc ** 2)
+                dphi0 = -np.sin(phi0) / ((1 / Ql - np.cos(phi0) / absQc) ** 2 * absQc)
+                ##err1 = ( (dQl*cov[2][2])**2 + (dabsQc*cov[1][1])**2 + (dphi0*cov[3][3])**2 )
+                err1 = ((dQl ** 2 * cov[2][2]) + (dabsQc ** 2 * cov[1][1]) + (dphi0 ** 2 * cov[3][3]))
+                err2 = (dQl * dabsQc * cov[2][1] + dQl * dphi0 * cov[2][3] + dabsQc * dphi0 * cov[1][3])
+                Qi_dia_corr_err = np.sqrt(err1 + 2 * err2)  # including correlations
+                errors = {"phi0_err": phi0_err, "Ql_err": Ql_err, "absQc_err": absQc_err, "fr_err": fr_err,
+                          "chi_square": chi_square, "Qi_no_corr_err": Qi_no_corr_err,
+                          "Qi_dia_corr_err": Qi_dia_corr_err}
+                results.update(errors)
+            else:
+                print("WARNING: Error calculation failed!")
+        else:
+            # just calc chisquared:
+            fun2 = lambda x: self._residuals_notch_ideal(x, f_data, z_data) ** 2
+            chi_square = 1. / float(len(f_data) - len(p)) * (fun2(p)).sum()
+            errors = {"chi_square": chi_square}
+            results.update(errors)
+
+        return results
 
 if __name__ == '__main__':
     if debug:
@@ -374,24 +435,23 @@ if __name__ == '__main__':
 
     port1.autofit()
     myfit(port1)
-    # dddelay = smart_search_chisqr(port1._delay, 14, verbose=True)  # TODO: expose depth to user via gui
-    port1.autofit(0)
+    dddelay = smart_search_chisqr(port1._delay, 14, verbose=True)  # TODO: expose depth to user via gui
+    port1.autofit(dddelay)
     maxval = np.max(np.absolute(port1.z_data_raw))
     z_data = port1.z_data_raw / maxval
     print my_fit_skewed_lorentzian(port1, port1.f_data, z_data)
-    print 0, port1.fitresults
+    print dddelay, port1.fitresults
 
     plt.figure(2)
     plt.ion()
     myplotnorm(port1)
     plt.figure(2)
     plt.ioff()
-    #just to see the difference:
+    # just to see the difference:
     port1 = circuit.notch_port()
     port1.add_data(freq, data)
-    port1.autofit(0)
+    port1.autofit(dddelay)
     print port1._delay, port1.fitresults
     plt.figure(7)
     myplotnorm(port1)
     port1.GUIfit()
-
