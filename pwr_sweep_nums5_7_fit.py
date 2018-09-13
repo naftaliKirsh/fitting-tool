@@ -11,22 +11,19 @@ import numpy as np
 from multiprocessing import Pool
 
 
-resonances = ['121.375e6','66.475e6'] #in Hz
 experiment_folder = r"Y:\Users\StudentProjects\edo mor\Measurement\experiment1" #must be a new folder
 meas = "S44" #trace type
-if_band = 1000.0 #IF bandwidth [Hz]
-num_pts = 801.0 #number of points
 averaging = False
 avg_number = 60000  #more averages than time, so it'll not start from the beginning
 widths = [9e6/1e3,5e6/1e3]#(span) in KHz (length equal to # of resonances)
 pwrs =  linspace(-30,-20,2) #dBm
-time_one_sweep = (num_pts/if_band)
 
 
 
 
-def run(experiment, root, resonances, meas, if_band, num_pts, widths, pwrs, time_one_sweep=(num_pts/if_band), waits=None, avg_number=None, ip_addr='169.254.252.66'):
+def run(experiment, root, resonances, meas, if_band, num_pts, widths, pwrs, waits=None, avg_number=None, ip_addr='169.254.252.66'):
 
+    time_one_sweep = (num_pts / if_band)
     pool = Pool(processes=len(resonances) * len(pwrs) * 2)
 
     if waits == None:
@@ -134,11 +131,6 @@ def run(experiment, root, resonances, meas, if_band, num_pts, widths, pwrs, time
         na.sendCommand("OUTP OFF")  # set power off at end for safety
         na.sendCommand("SENS:SWE:MODE HOLD")  # Hold mode
 
-    if ctrlC:
-        r = raw_input("Enter Y to delete saved data files...")
-        if r == "Y":
-            from shutil import rmtree
-            rmtree(experiment_folder)
 
     na.close()
     a = raw_input('press enter to close window... \n')  # TODO: make a better stopping mechanisem

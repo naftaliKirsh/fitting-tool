@@ -1,5 +1,5 @@
 # fitting-tool
-fitting tool for resonator
+fitting tool for resonators
 
 # requirements:
 

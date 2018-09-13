@@ -331,18 +331,7 @@ def smart_search_chisqr(start_value, depth, verbose=False):
     return delay
 
 
-def fit(FreqFile, DataFile, verbose=False):
-    try:
-        freq = np.loadtxt(FreqFile, delimiter=',')
-        dataRaw = np.loadtxt(DataFile, delimiter=',')
-    except IOError:
-        print 'ERROR: file not found'
-        exit(1)
-    data = dataRaw[0:-1:2] + 1j * dataRaw[1::2]
-
-    global port1
-    port1 = circuit.notch_port()
-    port1.add_data(freq, data)
+def fit(port1, verbose=False):
     myfit(port1)
     dddelay = smart_search_delay(port1._delay, 3, verbose=verbose)
     port1.autofit(dddelay)
