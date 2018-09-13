@@ -1,10 +1,8 @@
+import sys
 from collections import defaultdict, OrderedDict
-sys.path.insert(0,r'X:\QubitElectronics\Scripts\Resonators\fitting tool')
+sys.path.insert(0,r'../')
 import fitting_tool
 import os
-
-global ordered_supported_parameters
-ordered_supported_parameters = OrderedDict([('freqency_list', 'Ghz'), ('powers_list', 'db'), ('bios', 'V')])
 
 
 def tree(): return defaultdict(tree)
@@ -43,17 +41,18 @@ def fit(port1, experiment, root, path):
 
 
 class Experiment():
-    def __init__(self, **kwargs):
+    def __init__(self, ordered_supported_parameters=OrderedDict([('freqency_list', 'Ghz'), ('powers_list', 'db'), ('bios', 'V')]), **kwargs):
+        self.ordered_supported_parameters = ordered_supported_parameters
         if not 'freqency_list' in kwargs.keys():
             raise ValueError('freqency_list not set')
         if not 'powers_list' in kwargs.keys():
             raise ValueError('powers_list not set')
         for parameter in kwargs.keys():
-            if parameter not in ordered_supported_parameters.keys():
+            if parameter not in self.ordered_supported_parameters.keys():
                 raise ValueError(str(parameter) + ' is not a supported parameter')
         self.Tree = tree()
         self.parameters = OrderedDict()
-        for key in ordered_supported_parameters.keys():
+        for key in self.ordered_supported_parameters.keys():
             if key in kwargs:
                 self.parameters[key] = kwargs[key]
 
@@ -65,14 +64,14 @@ class Experiment():
         if len(parameters) > 0:
             if len(tree) == 0:
                 for value in parameters[parameters.keys()[0]]:
-                    # add(tree, [str(value)+str(ordered_supported_parameters[parameters.keys()[0]])])
-                    add(tree, [str(value)])
+                    # add(tree, [str(value)+str(self.ordered_supported_parameters[parameters.keys()[0]])]) #with units
+                    add(tree, [str(value)]) #without units
                 self.initialize(tree, parameters=remove(parameters, parameters.keys()[0]))
             else:
                 for branch in tree:
                     for value in parameters[parameters.keys()[0]]:
-                        # add(tree, [str(branch), str(value)+str(ordered_supported_parameters[parameters.keys()[0]])])
-                        add(tree, [str(branch), str(value)])
+                        # add(tree, [str(branch), str(value)+str(self.ordered_supported_parameters[parameters.keys()[0]])])  #with units
+                        add(tree, [str(branch), str(value)]) #without units
                     self.initialize(tree[branch], remove(parameters, parameters.keys()[0]))
 
     def populate(self,path, data, type):
@@ -84,17 +83,9 @@ class Experiment():
             with open(file, 'w') as fo:
                 fo.write(data)
 
-    def power_sweep_nums5_7_fit(self,tree, resonances, meas, if_band, num_pts, widths, pwrs, waits, time_one_sweep,avg_number=None, ip_addr='169.254.252.66'):
-        print tree, resonances, meas, if_band, num_pts, widths, pwrs, waits, time_one_sweep,avg_number, ip_addr
-
-    def meshure(self):
-        pass
-
-    def make_fit(self, pool, freq_num, dataComplex, parameters):
+    def make_fit(self, pool, f_data, complex_data, root, parameters):
         port1 = fitting_tool.my_notch_port()
-        port1.add_data(freq_num, dataComplex)
-        self.populate([root, resonance], freq_num, '_freq.out')
-        self.populate([root, resonance, power], dataComplex, '_data.out')
-        pool.apply_async(fit, (port1, experiment, root, resonance, power))
-
-    
+        port1.add_data(f_data, complex_data)
+        self.populate([root, parameters[0]], f_data, '_freq.out')
+        self.populate([root]+parameters, complex_data, '_data.out')
+        pool.apply_async(fit, (port1, self, root, parameters))

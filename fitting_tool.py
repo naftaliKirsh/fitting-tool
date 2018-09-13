@@ -15,7 +15,7 @@ global Scale
 Scale = 100
 
 global debug
-debug = False
+debug = True
 
 
 def file_chooser(format):
@@ -415,9 +415,9 @@ class my_notch_port(circuit.notch_port):
         return results
 
 if __name__ == '__main__':
-    if debug:
-        FreqFile = r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_freq.out'
-        DataFile = r'.\15_03_18 cooldown\Yaakov (channel 5)\PowerScan\4.71865e9_-45.0_data.out'
+    if not debug:
+        FreqFile = r'C:\Users\idomo\PycharmProjects\fitting-tool\temp\LORENTZIAN2_freq.out'
+        DataFile = r'C:\Users\idomo\PycharmProjects\fitting-tool\temp\LORENTZIAN2_data.out'
     else:
         FreqFile = file_chooser('*_freq.out')
         DataFile = file_chooser('*_data.out')

@@ -5,7 +5,7 @@ import os
 import argparse
 
 
-PATH = r'C:\Users\Owner\Desktop\test data 1'
+PATH = r'C:\Users\Owner\Desktop\test data 1' #change before run
 FREQFILE = '_freq.out'
 DATAFILE = '_data.out'
 OUTPUT_FOLDER = 'results'
