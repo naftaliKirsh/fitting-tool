@@ -1,7 +1,7 @@
 """Changes in v5.7 : save all measurements of a resonance in a single file"""
 import sys
 sys.path.insert(0,r'X:\CodeVault\PythonLibs')
-import N5230A.N5230A as nalib
+# import N5230A.N5230A as nalib
 from time import sleep
 import os
 from os.path import join

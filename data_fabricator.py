@@ -9,8 +9,8 @@ import fitting_tool
 Ql = 5e4
 Qc = 2e5
 phi = 0 * np.pi
-fr = 6e9
-f = np.arange(5.999e9, 6.001e9, 1e2)
+fr = 5e9
+f = np.arange(4.999e9, 5.001e9, 1e2)
 a = 1
 alpha = 1
 delay = 0.0e0

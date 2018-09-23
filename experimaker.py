@@ -1,14 +1,26 @@
 import sys
+import experiment
 from experiment import Experiment, build_tree
-sys.path.insert(0,r'../')
 import fitting_tool
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
+from multiprocessing import Pool, Value, Lock
 import Tkinter as tk
 import ttk
-# import pwr_sweep_nums5_7_fit
+import tkMessageBox as msgbox
+import pwr_sweep_nums5_7_fit
+import fake_device as device
+import threading
+
+global r
+r=0
+
+global c
+c=0
+
+global variables
+variables={}
 
 
 def main():
@@ -16,13 +28,13 @@ def main():
         variables_canvas.configure(scrollregion=variables_canvas.bbox("all"), width=variables_frame.winfo_width(), height=variables_frame.winfo_height())
 
     def plot_scrollbar_limits_set(event):
-        plot_canvas.configure(scrollregion=plot_canvas.bbox("all"), width=plot_frame.winfo_width(), height=plot_frame.winfo_height())
+        plot_canvas.configure(scrollregion=plot_canvas.bbox("all"), width=plot_frame.winfo_width(), height=180)
 
     def resize_variable_frame(event):
-        variables_canvas.itemconfig(in_canvas_variable_frame_id, height=variables_frame.winfo_height(), width=variables_canvas.winfo_width()-variable_scrollbar.winfo_width())
+        variables_canvas.itemconfig(in_canvas_variable_frame_id, width=variables_canvas.winfo_width()-variable_scrollbar.winfo_width())
 
     def resize_plot_frame(event):
-        plot_canvas.itemconfig(in_canvas_plot_frame_id, height=plot_frame.winfo_height()-plot_scrollbar.winfo_height(), width=plot_frame.winfo_width())
+        plot_canvas.itemconfig(in_canvas_plot_frame_id, height=plot_canvas.winfo_height()-plot_scrollbar.winfo_height())
 
     def get_coordinates(event):
         global xpos
@@ -34,6 +46,119 @@ def main():
         if root.winfo_containing(xpos, ypos) != None: #TODO: improove scroll detection
             variables_canvas.yview_scroll(-1 * (event.delta / 120), "units")
 
+    def add_variable(Variable_name='', Varible_value=''):
+        def delete_variable():
+            variable_name.destroy()
+            variable_value.destroy()
+            varialve_delete_butotn.destroy()
+        global r
+        varialve_delete_butotn = ttk.Button(in_canvas_variables_frame, text='X', command=delete_variable)
+        varialve_delete_butotn.grid(row=r)
+
+        variable_name = ttk.Combobox(in_canvas_variables_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                     state="readonly")
+        if Variable_name != '':
+            variable_name.current(Variable_name)
+        variable_name.grid(row=r, column=1)
+
+        variable_value = ttk.Entry(in_canvas_variables_frame)
+        variable_value.grid(row=r, column=2, sticky='E W')
+        variable_value.insert(tk.END, Varible_value)
+        variables[variable_name] = variable_value
+        r+=1
+
+    def add_plot(Plot_name=None, X_variable_name='', Y_variable_name=''):
+        global c
+        if Plot_name == None:
+            Plot_name = 'Plot '+str(c+1)
+        def delete_plot():
+            specific_plot_frame.destroy()
+        specific_plot_frame = ttk.Frame(in_canvas_plot_frame, relief=tk.RIDGE)
+        specific_plot_frame.grid(row=0, column=c, sticky='news')
+        plot_name = ttk.Entry(specific_plot_frame)
+        plot_name.insert(tk.END, Plot_name)
+        plot_name.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
+        plot_lable = ttk.Label(specific_plot_frame, text='x:')
+        plot_lable.grid(row=1, column=0, ipady=5, padx=10)
+        x_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                       state="readonly")
+        x_variable_name.grid(row=1, column=1, padx=10)
+        plot_y_lable = ttk.Label(specific_plot_frame, text='y:')
+        plot_y_lable.grid(row=2, column=0, pady=10)
+        y_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                       state="readonly")
+        y_variable_name.grid(row=2, column=1, pady=10)
+        spacing = tk.Label(specific_plot_frame)
+        spacing.grid(row=3)
+        plot_delete_buttion = ttk.Button(specific_plot_frame, text='X', command=delete_plot)
+        plot_delete_buttion.grid(row=4, column=0, columnspan=2, sticky='nsew')
+        c+=1
+
+    def add_3d_plot(Plot_name=None, X_variable_name='', Y_variable_name='', Z_variable_name=''):
+        global c
+        if Plot_name == None:
+            Plot_name = '3d plot '+str(c+1)
+        def delete_plot():
+            specific_plot_frame.destroy()
+        specific_plot_frame = ttk.Frame(in_canvas_plot_frame, relief=tk.RIDGE)
+        specific_plot_frame.grid(row=0, column=c, sticky='news')
+        plot_name = ttk.Entry(specific_plot_frame)
+        plot_name.insert(tk.END, Plot_name)
+        plot_name.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
+        plot_lable = ttk.Label(specific_plot_frame, text='x:')
+        plot_lable.grid(row=1, column=0, ipady=5, padx=10)
+        x_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                       state="readonly")
+        x_variable_name.grid(row=1, column=1, padx=10)
+        plot_y_lable = ttk.Label(specific_plot_frame, text='y:')
+        plot_y_lable.grid(row=2, column=0, pady=10)
+        y_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                       state="readonly")
+        y_variable_name.grid(row=2, column=1, pady=10)
+        plot_z_lable = ttk.Label(specific_plot_frame, text='z:')
+        plot_z_lable.grid(row=3, column=0)
+        z_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
+                                       state="readonly")
+        z_variable_name.grid(row=3, column=1)
+        plot_delete_buttion = ttk.Button(specific_plot_frame, text='X', command=delete_plot)
+        plot_delete_buttion.grid(row=4, column=0, columnspan=2, sticky='nsew')
+        c+=1
+
+    def make():
+        try:
+            vars = []
+            parameters={}
+            for var in variables.keys():
+                vars.append(var.get())
+            if len(vars) != len(set(vars)):
+                msgbox.showerror('Error', 'choosing the same parameter twice is not allowed\n'
+                                          'plese delet one')
+                return 1
+            for variable in  variables.keys():
+                parameters[variable.get()]=eval(variables[variable].get())
+
+            experiment1 = Experiment(**parameters)
+            print 'initializing...'
+            experiment1.initialize()
+            print 'building...'
+            tree_root = build_tree(experiment1.Tree)
+            print 'build done!'
+            count_limit = device.run(experiment1, tree_root, experiment1.parameters['freqency_list'], experiment1.parameters['powers_list'])
+            print count_limit
+            while True:
+                if device.counter.value==count_limit:
+                    break
+            print 'done!'
+
+
+        except:
+            msgbox.showerror('Error', 'plese check the following things:\n'
+                                      '* all values are in brackets\n'
+                                      '* all values are separated by commas\n'
+                                      '* make shure that freqency_list and powers are set\n'
+                                      'example:\n'
+                                      '\t[1.25, 25, 1.235e+3, 1.74e-6]')
+
 
     root = tk.Tk()
     screen_width = root.winfo_screenwidth()
@@ -42,20 +167,21 @@ def main():
     y = screen_height / 2 - screen_height * 0.75 / 2
     root.geometry(str(int(screen_width*0.75))+'x'+str(int(screen_height*0.75)))
     root.geometry("+%d+%d" % (int(x), int(y)))
-    experiment1 = Experiment(freqency_list=['121.375e6', '66.475e6'], powers_list=[20, 30])
-    experiment1.initialize()
 
     buttons_frame = ttk.Frame(root)
     buttons_frame.grid(row=0, sticky='w')
 
-    add_button = ttk.Button(buttons_frame, text='add')
+    add_button = ttk.Button(buttons_frame, text='add', command=add_variable)
     add_button.grid(row=0, column=0, sticky='nsew')
 
-    new_plot_buttom = ttk.Button(buttons_frame, text='new plot')
+    new_plot_buttom = ttk.Button(buttons_frame, text='new plot', command=add_plot)
     new_plot_buttom.grid(row=0, column=1, sticky='nsew')
 
-    new_3d_plot_button = ttk.Button(buttons_frame, text='new 3d plot')
+    new_3d_plot_button = ttk.Button(buttons_frame, text='new 3d plot', command=add_3d_plot)
     new_3d_plot_button.grid(row=0, column=2, sticky='nsew')
+
+    make = ttk.Button(buttons_frame, text='Make', command=make)
+    make.grid(row=0, column=3, sticky='nsew')
 
     variables_frame = ttk.Frame(root, relief=tk.GROOVE)
     variables_frame.grid(row=1, sticky='nsew')
@@ -68,17 +194,8 @@ def main():
     in_canvas_variable_frame_id = variables_canvas.create_window((0, 0), window=in_canvas_variables_frame, anchor='nw')
     in_canvas_variables_frame.bind("<Configure>", variables_scrollbar_limits_set)
     variables_canvas.bind("<Configure>", resize_variable_frame)
-    # root.bind('<Motion>', get_coordinates)
-    # in_canvas_variables_frame.bind_all("<MouseWheel>", _on_mousewheel)
-
-    delete_butotn = ttk.Button(in_canvas_variables_frame, text='X')
-    delete_butotn.grid(row=0)
-
-    w = ttk.Combobox(in_canvas_variables_frame, values=experiment1.ordered_supported_parameters.keys(), state="readonly")
-    w.grid(row=0, column=1)
-
-    e = ttk.Entry(in_canvas_variables_frame)
-    e.grid(row=0, column=2, sticky='E W')
+    root.bind('<Motion>', get_coordinates)
+    in_canvas_variables_frame.bind_all("<MouseWheel>", _on_mousewheel)
 
     plot_frame = ttk.Frame(root, relief=tk.GROOVE)
     plot_frame.grid(row=2, sticky='nsew')
@@ -91,37 +208,23 @@ def main():
     in_canvas_plot_frame_id = plot_canvas.create_window((0, 0), window=in_canvas_plot_frame, anchor='nw')
     in_canvas_plot_frame.bind("<Configure>", plot_scrollbar_limits_set)
     plot_canvas.bind("<Configure>", resize_plot_frame)
-    # root.bind('<Motion>', get_coordinates)
-    # root.bind_all("<MouseWheel>", _on_mousewheel)
-
-    specific_plot_frame = ttk.Frame(in_canvas_plot_frame, relief=tk.RIDGE)
-    specific_plot_frame.grid(column=0, sticky='news')
-    plot_name = ttk.Entry(specific_plot_frame, text='Plot 1')
-    plot_name.grid(row=0, column=0, columnspan=2)
-    plot_name = ttk.Entry(specific_plot_frame, text='Plot 2')
-    plot_name.grid(row=0, column=5, columnspan=2)
-    plot_x_lable = ttk.Label(specific_plot_frame, text='x:')
-    plot_x_lable.grid(row=1, column=0, columnspan=5)
-    plot_y_lable =ttk.Label(specific_plot_frame, text='y:')
-    plot_y_lable.grid(row=2, column=0)
-
-
-
-
-
+    root.bind('<Motion>', get_coordinates)
+    root.bind_all("<MouseWheel>", _on_mousewheel)
 
     root.rowconfigure(0, weight=0)
-    root.rowconfigure(1, weight=1)
-    root.rowconfigure(2, weight=3)
+    root.rowconfigure(1, weight=3)
+    root.rowconfigure(2, weight=1)
     root.columnconfigure(0, weight=1)
     in_canvas_variables_frame.columnconfigure(0, weight=0)
     in_canvas_variables_frame.columnconfigure(1, weight=0)
     in_canvas_variables_frame.columnconfigure(2, weight=1)
 
+    add_variable(0,'[5,6]')
+    add_variable(1,'[2.2, 3.5, 6.7, 8]')
+    add_plot()
+    add_3d_plot()
 
-    # root = build_tree(experiment1.Tree)
-    # pwr_sweep_nums5_7_fit.run(experiment1, root)
-    # experiment1.power_sweep_nums5_7_fit()
+
     root.mainloop()
 
 if __name__=='__main__':

@@ -2,8 +2,8 @@ import sys
 from collections import defaultdict, OrderedDict
 sys.path.insert(0,r'../')
 import fitting_tool
+import numpy as np
 import os
-
 
 def tree(): return defaultdict(tree)
 
@@ -34,14 +34,26 @@ def remove(d, key):
     return new_d
 
 def fit(port1, experiment, root, path):
+    global counter
+
+    print '\t\t\t\tstart'
     fit_results = fitting_tool.fit(port1)
-    experiment.populate([root]+path, fit_results, '_results.out')
     print fit_results
+    experiment.populate([root]+path, str(fit_results), '_results.out')
+    with counter.get_lock():
+        counter.value += 1
+    print counter.value
     fitting_tool.myplotnorm(port1)
+
+def init_process(args):
+    global counter
+    counter = args
+
+Ordered_supported_parameters = OrderedDict([('freqency_list', 'Ghz'), ('powers_list', 'db'), ('bios', 'V')])
 
 
 class Experiment():
-    def __init__(self, ordered_supported_parameters=OrderedDict([('freqency_list', 'Ghz'), ('powers_list', 'db'), ('bios', 'V')]), **kwargs):
+    def __init__(self, ordered_supported_parameters=Ordered_supported_parameters, **kwargs):
         self.ordered_supported_parameters = ordered_supported_parameters
         if not 'freqency_list' in kwargs.keys():
             raise ValueError('freqency_list not set')
@@ -81,11 +93,13 @@ class Experiment():
         if not os.path.exists(os.path.join(*path)):
             file = os.path.join(*path)
             with open(file, 'w') as fo:
-                fo.write(data)
+                fo.write(str(data))
 
-    def make_fit(self, pool, f_data, complex_data, root, parameters):
+    def make_fit(self, pool, f_data, complex_data, root, parameters, Counter):
+        global counter
+        counter = Counter
         port1 = fitting_tool.my_notch_port()
         port1.add_data(f_data, complex_data)
-        self.populate([root, parameters[0]], f_data, '_freq.out')
-        self.populate([root]+parameters, complex_data, '_data.out')
+        self.populate([root, parameters[0]], list(f_data), '_freq.out')
+        self.populate([root]+parameters, list(complex_data), '_data.out')
         pool.apply_async(fit, (port1, self, root, parameters))

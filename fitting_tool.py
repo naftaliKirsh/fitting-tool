@@ -220,14 +220,14 @@ def myfit(self, electric_delay=None, fcrop=None):
     #                                        delay=0.)
     self._delay = delay
     try:
-        self._errors = [port1.fitresults['fr_err'] * 1e-3, port1.fitresults[
+        self._errors = [self.fitresults['fr_err'] * 1e-3, self.fitresults[
             'Ql_err'] * 1e-3]  # TODO: fix WARNING: Error calculation failed! originating in circuir.py line: 410 due to matrix A being singular
     except KeyError:
         self._errors = [None, None]
     self._tests = [max(np.absolute(self.z_data) - (np.absolute(self.z_data_sim_norm[self._fid]))) * 100,
-                   max(np.angle(port1.z_data) - (np.angle(port1.z_data_sim_norm[port1._fid]))) * 100,
-                   max(np.real(port1.z_data) - (np.real(port1.z_data_sim_norm[port1._fid]))) * 100,
-                   max(np.imag(port1.z_data) - (np.imag(port1.z_data_sim_norm[port1._fid]))) * 100]
+                   max(np.angle(self.z_data) - (np.angle(self.z_data_sim_norm[self._fid]))) * 100,
+                   max(np.real(self.z_data) - (np.real(self.z_data_sim_norm[self._fid]))) * 100,
+                   max(np.imag(self.z_data) - (np.imag(self.z_data_sim_norm[self._fid]))) * 100]
 
 
 def my_fit_skewed_lorentzian(self, f_data, z_data):  # TODO: fix lorentzian fitter
@@ -331,11 +331,16 @@ def smart_search_chisqr(start_value, depth, verbose=False):
     return delay
 
 
-def fit(port1, verbose=False):
+def fit(Port1, verbose=False):
+    global port1
+    port1 = Port1
+    port1.autofit()
     myfit(port1)
     dddelay = smart_search_delay(port1._delay, 3, verbose=verbose)
     port1.autofit(dddelay)
-    return dddelay, port1.fitresults
+    results = port1.fitresults
+    results['delay'] = dddelay
+    return results
 
 
 class my_notch_port(circuit.notch_port):
