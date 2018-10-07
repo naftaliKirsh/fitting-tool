@@ -1,17 +1,15 @@
-import sys
 import experiment
 from experiment import Experiment, build_tree
-import fitting_tool
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-from multiprocessing import Pool, Value, Lock
+from fitting_tool import SUPPORTED_FIT_RESULTS
+from experiment import Ordered_supported_parameters
 import Tkinter as tk
 import ttk
 import tkMessageBox as msgbox
-import pwr_sweep_nums5_7_fit
 import fake_device as device
-import threading
+import report_generator
+import report_generator
+import json
+
 
 global r
 r=0
@@ -21,6 +19,10 @@ c=0
 
 global variables
 variables={}
+
+global plots
+plots={}
+
 
 
 def main():
@@ -51,6 +53,7 @@ def main():
             variable_name.destroy()
             variable_value.destroy()
             varialve_delete_butotn.destroy()
+            variables.pop(variable_name)
         global r
         varialve_delete_butotn = ttk.Button(in_canvas_variables_frame, text='X', command=delete_variable)
         varialve_delete_butotn.grid(row=r)
@@ -64,8 +67,19 @@ def main():
         variable_value = ttk.Entry(in_canvas_variables_frame)
         variable_value.grid(row=r, column=2, sticky='E W')
         variable_value.insert(tk.END, Varible_value)
+
         variables[variable_name] = variable_value
         r+=1
+
+    def check_plot_validity(box, other_boxes, *args):
+        for other_box_variable in other_boxes:
+            for list_variable in args:
+                if other_box_variable.get() in list_variable:
+                    box['values'] = list_variable.keys()
+                    return True
+        else:
+            combined_list = [item for sublist in args for item in sublist.keys()]
+            box['values'] = combined_list
 
     def add_plot(Plot_name=None, X_variable_name='', Y_variable_name=''):
         global c
@@ -73,6 +87,7 @@ def main():
             Plot_name = 'Plot '+str(c+1)
         def delete_plot():
             specific_plot_frame.destroy()
+            plots.pop(plot_name)
         specific_plot_frame = ttk.Frame(in_canvas_plot_frame, relief=tk.RIDGE)
         specific_plot_frame.grid(row=0, column=c, sticky='news')
         plot_name = ttk.Entry(specific_plot_frame)
@@ -81,17 +96,19 @@ def main():
         plot_lable = ttk.Label(specific_plot_frame, text='x:')
         plot_lable.grid(row=1, column=0, ipady=5, padx=10)
         x_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
-                                       state="readonly")
+                                       state="readonly", postcommand=lambda: check_plot_validity(x_variable_name, [y_variable_name], SUPPORTED_FIT_RESULTS, Ordered_supported_parameters))
         x_variable_name.grid(row=1, column=1, padx=10)
         plot_y_lable = ttk.Label(specific_plot_frame, text='y:')
         plot_y_lable.grid(row=2, column=0, pady=10)
         y_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
-                                       state="readonly")
+                                       state="readonly", postcommand=lambda: check_plot_validity(y_variable_name, [x_variable_name], SUPPORTED_FIT_RESULTS, Ordered_supported_parameters))
         y_variable_name.grid(row=2, column=1, pady=10)
         spacing = tk.Label(specific_plot_frame)
         spacing.grid(row=3)
         plot_delete_buttion = ttk.Button(specific_plot_frame, text='X', command=delete_plot)
         plot_delete_buttion.grid(row=4, column=0, columnspan=2, sticky='nsew')
+
+        plots[plot_name] = (x_variable_name, y_variable_name)
         c+=1
 
     def add_3d_plot(Plot_name=None, X_variable_name='', Y_variable_name='', Z_variable_name=''):
@@ -100,6 +117,7 @@ def main():
             Plot_name = '3d plot '+str(c+1)
         def delete_plot():
             specific_plot_frame.destroy()
+            plots.pop(plot_name)
         specific_plot_frame = ttk.Frame(in_canvas_plot_frame, relief=tk.RIDGE)
         specific_plot_frame.grid(row=0, column=c, sticky='news')
         plot_name = ttk.Entry(specific_plot_frame)
@@ -108,20 +126,22 @@ def main():
         plot_lable = ttk.Label(specific_plot_frame, text='x:')
         plot_lable.grid(row=1, column=0, ipady=5, padx=10)
         x_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
-                                       state="readonly")
+                                       state="readonly", postcommand=lambda: check_plot_validity(x_variable_name, [y_variable_name, z_variable_name], SUPPORTED_FIT_RESULTS, Ordered_supported_parameters))
         x_variable_name.grid(row=1, column=1, padx=10)
         plot_y_lable = ttk.Label(specific_plot_frame, text='y:')
         plot_y_lable.grid(row=2, column=0, pady=10)
         y_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
-                                       state="readonly")
+                                       state="readonly", postcommand=lambda: check_plot_validity(y_variable_name, [x_variable_name, z_variable_name], SUPPORTED_FIT_RESULTS, Ordered_supported_parameters))
         y_variable_name.grid(row=2, column=1, pady=10)
         plot_z_lable = ttk.Label(specific_plot_frame, text='z:')
         plot_z_lable.grid(row=3, column=0)
         z_variable_name = ttk.Combobox(specific_plot_frame, values=experiment.Ordered_supported_parameters.keys(),
-                                       state="readonly")
+                                       state="readonly", postcommand=lambda: check_plot_validity(z_variable_name, [y_variable_name, x_variable_name], SUPPORTED_FIT_RESULTS, Ordered_supported_parameters))
         z_variable_name.grid(row=3, column=1)
         plot_delete_buttion = ttk.Button(specific_plot_frame, text='X', command=delete_plot)
         plot_delete_buttion.grid(row=4, column=0, columnspan=2, sticky='nsew')
+
+        plots[plot_name] = (x_variable_name, y_variable_name, z_variable_name)
         c+=1
 
     def make():
@@ -134,6 +154,18 @@ def main():
                 msgbox.showerror('Error', 'choosing the same parameter twice is not allowed\n'
                                           'plese delet one')
                 return 1
+
+            for plot in plots:
+                for axis in plots[plot]:
+                    if not axis.get() in vars+SUPPORTED_FIT_RESULTS.keys():
+                        if axis.get() == '':
+                            msgbox.showerror('Error', 'enpthy field not allowed in plot')
+                            return 1
+                        else:
+                            msgbox.showerror('Error', 'parameter '+axis.get()+' was not set')
+                            return 1
+
+
             for variable in  variables.keys():
                 parameters[variable.get()]=eval(variables[variable].get())
 
@@ -142,14 +174,24 @@ def main():
             experiment1.initialize()
             print 'building...'
             tree_root = build_tree(experiment1.Tree)
+            with open(tree_root+'\\parameters.json', 'w') as fo:
+                json.dump(experiment1.parameters, fo)
             print 'build done!'
             count_limit = device.run(experiment1, tree_root, experiment1.parameters['freqency_list'], experiment1.parameters['powers_list'])
             print count_limit
             while True:
                 if device.counter.value==count_limit:
                     break
-            print 'done!'
-
+            print '\ndone!'
+            data = experiment.load_data('./tree')
+            plot_list = []
+            for plot in plots:
+                if len(plots[plot]) == 3:
+                    plot_list.append(([plots[plot][0].get(),plots[plot][1].get(),plots[plot][2].get()],))
+                elif len(plots[plot]) == 2:
+                    plot_list.append(([plots[plot][0].get(), plots[plot][1].get()],))
+            # report_generator.make_report(data, plot_list)
+            print 'a'
 
         except:
             msgbox.showerror('Error', 'plese check the following things:\n'

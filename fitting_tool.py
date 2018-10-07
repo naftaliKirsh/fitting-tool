@@ -4,12 +4,19 @@ import Tkinter, tkFileDialog
 import matplotlib.pyplot as plt
 import scipy.optimize as spopt
 from resonator_tools.circuit import notch_port
+from collections import OrderedDict
 
 import skewed_lorentzian_fitter as slf
 from os.path import join
 import os
 import pprint
 from matplotlib import pyplot
+
+SUPPORTED_FIT_RESULTS = OrderedDict([('fr','Hz'),('|Qc|',''),('Qc_dia_corr',''),
+                                     ('Qi_dia_corr',''),('phi0','rad'),('theta0','rad'),
+                                     ('delay','sec'),('Qi_no_corr_err',''),('Qi_dia_corr_err',''),
+                                     ('Qi_no_corr',''),('absQc_err',''),('fr_err','Hz'),
+                                     ('phi0_err','rad'),('Ql',''),('chi_square',''),('Ql_err','')])
 
 global Scale
 Scale = 100
@@ -434,7 +441,9 @@ if __name__ == '__main__':
     maxval = np.max(np.absolute(port1.z_data_raw))
     z_data = port1.z_data_raw / maxval
     print my_fit_skewed_lorentzian(port1, port1.f_data, z_data)
-    print dddelay, port1.fitresults
+    results = port1.fitresults
+    results['delay'] = dddelay
+    print results
 
     plt.figure(2)
     plt.ion()
