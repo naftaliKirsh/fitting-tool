@@ -7,3 +7,5 @@ fitting tool for resonators
 * matplotlib 2.0.2 ERECTLY AND NO LATER
 * numpy
 * scipy
+
+test
